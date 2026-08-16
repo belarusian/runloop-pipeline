@@ -41,4 +41,4 @@ truncate columns.
   column (fail), missing column (fail).
 
 ---
-_GitHub issue: TBD_
+_GitHub issue: https://github.com/belarusian/runloop-pipeline/issues/53

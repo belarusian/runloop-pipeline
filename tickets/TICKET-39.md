@@ -38,4 +38,4 @@ would report the inferred types.
   for output column ordering when no explicit output schema is given.
 
 ---
-_GitHub issue: TBD_
+_GitHub issue: https://github.com/belarusian/runloop-pipeline/issues/52
