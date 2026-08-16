@@ -27,6 +27,10 @@ def test_expected_public_api():
         "Select",
         "Aggregate",
         "apply_transforms",
+        # Streaming + composition (Cycle 4)
+        "stream_transforms",
+        "compose",
+        "Composed",
     }
     assert expected.issubset(set(pipeline.__all__))
 

@@ -22,7 +22,7 @@ Failure contract: every failure in this module raises
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
 
 from pipeline.errors import TransformError
 
@@ -38,7 +38,15 @@ class Transform(ABC):
     :meth:`apply_one` over the records and drops any ``None`` results. Batch-only
     ops (e.g. :class:`Aggregate`) override :meth:`apply` and raise
     :class:`~pipeline.errors.TransformError` from :meth:`apply_one`.
+
+    The :attr:`streamable` class attribute marks whether an op can run in a
+    streaming (per-record, bounded-memory) pipeline. Per-record ops are
+    streamable by default; batch-only ops set it to ``False`` so that
+    :func:`stream_transforms` and :func:`compose` reject them up front.
     """
+
+    #: Whether this op can participate in a streaming pipeline.
+    streamable: bool = True
 
     @abstractmethod
     def apply_one(self, record: dict) -> dict | None:
@@ -181,6 +189,9 @@ class Aggregate(Transform):
     raises :class:`~pipeline.errors.TransformError`.
     """
 
+    #: Aggregation needs the whole batch, so it cannot stream.
+    streamable: bool = False
+
     def __init__(self, group_by: list[str], agg: dict[str, str]) -> None:
         self._group_by = list(group_by)
         self._agg = dict(agg)
@@ -275,3 +286,104 @@ def apply_transforms(records: list[dict], transforms: list[Transform]) -> list[d
     for transform in transforms:
         current = transform.apply(current)
     return current
+
+
+def stream_transforms(
+    source: Iterator[dict],
+    transforms: list[Transform],
+) -> Iterator[dict]:
+    """Lazily apply a sequence of streamable transforms to a record stream.
+
+    This is the streaming analogue of :func:`apply_transforms`. It does not
+    materialize *source*: it pulls one record at a time, applies each
+    transform's :meth:`Transform.apply_one` in order, and yields the result.
+    A record is dropped (not yielded) if any step returns ``None``. Peak
+    memory is bounded by a single record plus the transform list.
+
+    Args:
+        source: an iterator yielding input records.
+        transforms: the transforms to apply, in order. Every transform must
+            have :attr:`Transform.streamable` set to ``True``.
+
+    Yields:
+        One transformed record per surviving input record.
+
+    Raises:
+        TransformError: if any transform in *transforms* is not streamable
+            (e.g. a batch-only :class:`Aggregate`).
+    """
+    for transform in transforms:
+        if not transform.streamable:
+            raise TransformError(
+                f"stream_transforms: transform {type(transform).__name__!r} is not "
+                "streamable and cannot be used in a streaming pipeline"
+            )
+
+    for record in source:
+        current: dict | None = record
+        for transform in transforms:
+            if current is None:
+                break
+            current = transform.apply_one(current)
+        if current is not None:
+            yield current
+
+
+class Composed(Transform):
+    """A single transform that chains a tuple of transforms in order.
+
+    :meth:`apply_one` runs each member's :meth:`Transform.apply_one` in order,
+    threading the intermediate record through. If any member returns ``None``,
+    the chain stops and ``None`` is returned (the record is dropped). The
+    batch entry point :meth:`apply` is inherited from :class:`Transform`, so it
+    maps :meth:`apply_one` over a list and drops ``None`` results.
+
+    A :class:`Composed` is streamable only if every member is streamable; this
+    is enforced at construction by :func:`compose`.
+
+    Args:
+        transforms: the member transforms, in the order they should run.
+    """
+
+    def __init__(self, transforms: tuple[Transform, ...]) -> None:
+        self._transforms = tuple(transforms)
+
+    @property
+    def transforms(self) -> tuple[Transform, ...]:
+        """The member transforms, in order."""
+        return self._transforms
+
+    def apply_one(self, record: dict) -> dict | None:
+        """Chain each member's :meth:`apply_one`, dropping on the first ``None``.
+
+        Returns:
+            The fully transformed record, or ``None`` if any member dropped it.
+        """
+        current: dict | None = record
+        for transform in self._transforms:
+            if current is None:
+                break
+            current = transform.apply_one(current)
+        return current
+
+
+def compose(*transforms: Transform) -> Composed:
+    """Build a :class:`Composed` transform from *transforms*, in order.
+
+    Args:
+        *transforms: the transforms to chain, in the order they should run.
+
+    Returns:
+        A :class:`Composed` whose :meth:`apply_one` runs the members in order.
+
+    Raises:
+        TransformError: if any argument is not streamable (e.g. a batch-only
+            :class:`Aggregate`).
+    """
+    for transform in transforms:
+        if not transform.streamable:
+            raise TransformError(
+                f"compose: transform {type(transform).__name__!r} is not streamable "
+                "and cannot be composed into a streaming transform"
+            )
+    return Composed(tuple(transforms))

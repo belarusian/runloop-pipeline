@@ -10,7 +10,7 @@ from `pipeline/__init__.py` (see `pipeline.__all__`).
 | `PipelineError` | `Exception` | Base for all pipeline failures. |
 | `IngestError` | `PipelineError` | File unreadable / undecodable / malformed CSV. |
 | `SchemaError` | `PipelineError` | Inference failed / value not coercible. |
-| `TransformError` | `PipelineError` | A transform op failed (Cycle 3). |
+| `TransformError` | `PipelineError` | A transform op failed. |
 
 ## Schema
 
@@ -33,21 +33,20 @@ from `pipeline/__init__.py` (see `pipeline.__all__`).
 
 where `record = dict[str, int | float | str]`.
 
-## Transformation phase (Cycle 3 target)
+## Transformation phase (implemented)
 
-`pipeline/transform.py` is **not yet implemented**. The intended public
-interface, to be added and exported from `pipeline/__init__.py`:
+`pipeline/transform.py` is implemented. All symbols below are exported from
+`pipeline/__init__.py`.
 
-### `Transform` (protocol / ABC)
+### `Transform` (ABC)
 The base contract every op implements.
 
-- `apply(records: list[record]) -> list[record]`
-  Batch entry point. Pure: returns a new list, never mutates the input.
 - `apply_one(record: record) -> record | None`
   Per-record variant. Return the transformed record, or `None` to drop it
-  (used by `Filter`). Ops that are not naturally per-record (e.g. `Aggregate`)
-  may implement `apply` only and raise `TransformError` from `apply_one`, or
-  document that they are batch-only.
+  (used by `Filter`). Batch-only ops raise `TransformError` from `apply_one`.
+- `apply(records: list[record]) -> list[record]`
+  Batch entry point. The default maps `apply_one` over *records* and drops
+  `None` results. Pure: returns a new list, never mutates the input.
 
 ### Concrete ops
 - `Filter(predicate: Callable[[record], bool])` — keep records where
@@ -56,9 +55,10 @@ The base contract every op implements.
   — replace `record[name]` with `fn(record[name])` in a new dict.
 - `Rename(old: str, new: str)` — rename a column in a new dict.
 - `Select(names: list[str])` — keep only the named columns, in order.
-- `Aggregate(group_by: list[str], agg: dict[str, Callable])` — one output row
-  per distinct `group_by` key; `agg` maps a column to an aggregation function
-  (e.g. `sum`, `len`). Batch-only.
+- `Aggregate(group_by: list[str], agg: dict[str, str])` — one output row per
+  distinct `group_by` key (first-seen order); `agg` maps a column to a kind in
+  `{'sum','mean','count','min','max'}`. Batch-only: `apply_one` raises
+  `TransformError`.
 
 ### Composition
 - `apply_transforms(records: list[record], transforms: list[Transform]) -> list[record]`
@@ -71,4 +71,24 @@ Every failure in this module raises `TransformError` (from
 `MapColumn`/`Rename`/`Select`, a `predicate`/`fn` that raises, or an
 `Aggregate` over a non-numeric column.
 
-> Status: **TBD** — see tickets `TICKET-11` … `TICKET-15`.
+## Streaming + Composition (Cycle 4 target)
+
+Not yet implemented. The intended additions to `pipeline/transform.py`, to be
+exported from `pipeline/__init__.py`:
+
+- `Transform.streamable: bool` — class attribute, `True` for per-record ops
+  (`Filter`, `MapColumn`, `Rename`, `Select`), `False` for batch-only ops
+  (`Aggregate`). Lets a streaming path detect and reject non-streamable ops
+  up front. See `TICKET-16`.
+- `stream_transforms(source: Iterator[record], transforms: list[Transform]) -> Iterator[record]`
+  Lazily apply a sequence of per-record transforms over an `Iterator[record]`
+  source (e.g. `iter_rows`). Yields one record at a time; drops a record if any
+  op's `apply_one` returns `None`; rejects any non-streamable op up front by
+  raising `TransformError`. See `TICKET-17`.
+- `Composed(Transform)` — a `Transform` wrapping a sequence of transforms;
+  `apply_one`/`apply` chain the members, and `streamable` is `True` only if
+  every member is streamable.
+- `compose(*transforms: Transform) -> Composed` — fold a sequence into a single
+  `Composed`. See `TICKET-18`.
+
+> Status: **TBD** — see tickets `TICKET-16` … `TICKET-20`.
