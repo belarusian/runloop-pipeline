@@ -2,6 +2,7 @@
 
 from pipeline.errors import IngestError, PipelineError, SchemaError, TransformError
 from pipeline.ingest import iter_rows, read_csv
+from pipeline.pipeline import Pipeline
 from pipeline.schema import Column, Schema, coerce_value, infer_schema
 from pipeline.transform import (
     Aggregate,
@@ -25,6 +26,7 @@ __all__ = [
     "Filter",
     "IngestError",
     "MapColumn",
+    "Pipeline",
     "PipelineError",
     "Rename",
     "Schema",
