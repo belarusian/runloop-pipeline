@@ -5,12 +5,15 @@ from pipeline.ingest import iter_rows, read_csv
 from pipeline.schema import Column, Schema, coerce_value, infer_schema
 from pipeline.transform import (
     Aggregate,
+    Composed,
     Filter,
     MapColumn,
     Rename,
     Select,
     Transform,
     apply_transforms,
+    compose,
+    stream_transforms,
 )
 
 __version__ = "0.1.0"
@@ -18,6 +21,7 @@ __version__ = "0.1.0"
 __all__ = [
     "Aggregate",
     "Column",
+    "Composed",
     "Filter",
     "IngestError",
     "MapColumn",
@@ -30,7 +34,9 @@ __all__ = [
     "TransformError",
     "apply_transforms",
     "coerce_value",
+    "compose",
     "infer_schema",
     "iter_rows",
     "read_csv",
+    "stream_transforms",
 ]
