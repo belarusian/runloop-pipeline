@@ -8,6 +8,7 @@ rows of string cells and classifies each column as ``int``, ``float``, or
 
 from __future__ import annotations
 
+from collections.abc import Iterator
 from dataclasses import dataclass
 
 from pipeline.errors import SchemaError
@@ -46,6 +47,46 @@ class Schema:
         """Return a mapping of column name to Python type."""
         return {column.name: column.type for column in self.columns}
 
+    def to_dict(self) -> dict[str, type]:
+        """Return a plain ``{name: type}`` mapping for serialization.
+
+        This is equivalent to :meth:`types` and is provided as a stable,
+        JSON/config-friendly hook for callers that want a dict view of the
+        schema without reaching into :attr:`columns`.
+        """
+        return self.types()
+
+    def project(self, names: list[str]) -> Schema:
+        """Return a new :class:`Schema` with only the named columns.
+
+        The returned schema contains exactly the columns named in *names*, in
+        the order given. This is a projection: it does not mutate the original.
+
+        Args:
+            names: the column names to keep, in the desired order.
+
+        Returns:
+            A new :class:`Schema` holding only the requested columns.
+
+        Raises:
+            SchemaError: if any name in *names* is not present in this schema.
+        """
+        by_name = {column.name: column for column in self.columns}
+        projected: list[Column] = []
+        for name in names:
+            if name not in by_name:
+                raise SchemaError(f"column {name!r} not found in schema")
+            projected.append(by_name[name])
+        return Schema(columns=tuple(projected))
+
+    def __len__(self) -> int:
+        """Return the number of columns in the schema."""
+        return len(self.columns)
+
+    def __iter__(self) -> Iterator[Column]:
+        """Iterate over the columns in order."""
+        return iter(self.columns)
+
 
 def _parses_as_int(value: str) -> bool:
     """Return True if *value* parses as an ``int``."""
@@ -65,7 +106,11 @@ def _parses_as_float(value: str) -> bool:
     return True
 
 
-def infer_schema(sample_rows: list[list[str]], header: list[str] | None = None) -> Schema:
+def infer_schema(
+    sample_rows: list[list[str]],
+    header: list[str] | None = None,
+    sample_size: int | None = None,
+) -> Schema:
     """Infer a :class:`Schema` from sample rows of string cells.
 
     Each column is classified as ``int`` if every non-empty cell parses as an
@@ -76,13 +121,20 @@ def infer_schema(sample_rows: list[list[str]], header: list[str] | None = None) 
         sample_rows: a list of rows, each a list of string cells.
         header: optional column names. When omitted, names are generated as
             ``col_0``, ``col_1``, ... in order.
+        sample_size: optional bound on how many leading rows feed inference.
+            When set, only ``sample_rows[:sample_size]`` are inspected, which
+            keeps inference cheap on large inputs. ``None`` (the default) uses
+            every row, preserving the original behavior.
 
     Returns:
         The inferred :class:`Schema`.
 
     Raises:
-        SchemaError: if *sample_rows* is empty.
+        SchemaError: if the (possibly sliced) sample is empty.
     """
+    if sample_size is not None:
+        sample_rows = sample_rows[:sample_size]
+
     if not sample_rows:
         raise SchemaError("cannot infer schema from an empty sample")
 
