@@ -31,6 +31,8 @@ def test_expected_public_api():
         "stream_transforms",
         "compose",
         "Composed",
+        # Orchestration (Cycle 5)
+        "Pipeline",
     }
     assert expected.issubset(set(pipeline.__all__))
 
