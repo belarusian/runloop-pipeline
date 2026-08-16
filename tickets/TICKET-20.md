@@ -37,4 +37,4 @@ no tests for the Cycle 4 streaming/composition surface (`streamable`,
 - Add a purity test asserting the source records are not mutated.
 
 ---
-_GitHub issue: TBD_
+_GitHub issue: https://github.com/belarusian/runloop-pipeline/issues/23

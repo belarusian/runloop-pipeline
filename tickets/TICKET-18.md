@@ -37,4 +37,4 @@ in `pipeline/transform.py`.
   `docs/API.md`.
 
 ---
-_GitHub issue: TBD_
+_GitHub issue: https://github.com/belarusian/runloop-pipeline/issues/21

@@ -31,4 +31,4 @@ API even once implemented.
 - Update `docs/API.md` and `docs/MODULES.md` to list the new exports.
 
 ---
-_GitHub issue: TBD_
+_GitHub issue: https://github.com/belarusian/runloop-pipeline/issues/22

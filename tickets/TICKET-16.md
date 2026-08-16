@@ -37,4 +37,4 @@ path. No such attribute exists on `Transform` or any concrete op.
 - Document the attribute in `docs/API.md` and `docs/ARCHITECTURE.md`.
 
 ---
-_GitHub issue: TBD_
+_GitHub issue: https://github.com/belarusian/runloop-pipeline/issues/19

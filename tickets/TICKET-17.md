@@ -39,4 +39,4 @@ sequence of per-record transforms over an `Iterator[dict]` source (e.g.
   `docs/API.md`.
 
 ---
-_GitHub issue: TBD_
+_GitHub issue: https://github.com/belarusian/runloop-pipeline/issues/20
