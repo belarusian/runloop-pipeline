@@ -19,7 +19,7 @@ from itertools import islice
 from pathlib import Path
 
 from pipeline.errors import IngestError
-from pipeline.schema import Schema, coerce_value, infer_schema
+from pipeline.schema import Column, Schema, coerce_value, infer_schema
 
 
 def _coerce_row(row: list[str], schema: Schema) -> dict[str, int | float | str]:
@@ -28,6 +28,21 @@ def _coerce_row(row: list[str], schema: Schema) -> dict[str, int | float | str]:
     for column, cell in zip(schema.columns, row):
         record[column.name] = coerce_value(cell, column.type)
     return record
+
+
+def _schema_from_header(header: list[str]) -> Schema:
+    """Build a :class:`Schema` from a header row, typing every column as ``str``.
+
+    Used for a header-only source (a header row with no data rows), where there
+    is no data to infer column types from, so every column defaults to ``str``.
+
+    Args:
+        header: the header row (a list of column names).
+
+    Returns:
+        A :class:`Schema` whose columns are the header names, each typed ``str``.
+    """
+    return Schema(columns=tuple(Column(name=h, type=str) for h in header))
 
 
 def read_csv(
@@ -78,6 +93,11 @@ def read_csv(
             raise IngestError(
                 f"ragged row in {path!r}: expected {width} fields, got {len(row)}"
             )
+
+    if not data_rows:
+        # Header-only source: there is no data to infer types from, so every
+        # column is typed str and there are no records to return.
+        return _schema_from_header(header), []
 
     schema = infer_schema(data_rows, header=header, sample_size=sample_size)
 
@@ -137,6 +157,11 @@ def iter_rows(
                     f"ragged row in {path!r}: expected {width} fields, got {len(row)}"
                 )
             sample.append(row)
+
+        if not sample:
+            # Header-only source: no data rows to infer from, so the schema is
+            # built from the header (every column str) and nothing is yielded.
+            return
 
         schema = infer_schema(sample, header=header, sample_size=sample_size)
 

@@ -139,3 +139,40 @@ def test_read_csv_sample_size_threads_into_inference(tmp_path):
     full_schema, full_records = read_csv(csv_file, sample_size=None)
     assert full_schema.types() == {"value": str}
     assert full_records == [{"value": v} for v in ("1", "2", "x", "y")]
+
+
+# ---------------------------------------------------------------------------
+# header-only source (a header row with no data rows)
+# ---------------------------------------------------------------------------
+
+
+def test_read_csv_header_only_returns_str_schema_and_no_records(tmp_path):
+    csv_file = tmp_path / "header_only.csv"
+    csv_file.write_text("id,name,score\n")
+
+    schema, records = read_csv(csv_file)
+
+    assert records == []
+    assert schema.names() == ["id", "name", "score"]
+    # No data to infer from, so every column is typed str.
+    assert schema.types() == {"id": str, "name": str, "score": str}
+    assert all(column.type is str for column in schema)
+
+
+def test_read_csv_header_only_single_column(tmp_path):
+    csv_file = tmp_path / "one_col.csv"
+    csv_file.write_text("value\n")
+
+    schema, records = read_csv(csv_file)
+
+    assert records == []
+    assert schema.names() == ["value"]
+    assert schema.types() == {"value": str}
+
+
+def test_iter_rows_header_only_yields_nothing_and_does_not_raise(tmp_path):
+    csv_file = tmp_path / "header_only.csv"
+    csv_file.write_text("id,name,score\n")
+
+    # Consuming the generator must not raise and must yield nothing.
+    assert list(iter_rows(csv_file)) == []
