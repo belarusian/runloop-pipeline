@@ -53,4 +53,4 @@ only when the issue list is empty.
   `to_csv`) and update `docs/API.md` and `docs/README.md` accordingly.
 
 ---
-_GitHub issue: TBD
+_GitHub issue: #47

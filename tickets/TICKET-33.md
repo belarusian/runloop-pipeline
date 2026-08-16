@@ -59,4 +59,4 @@ pipeline level.
   output `utf-8`) and the BOM-stripping behavior.
 
 ---
-_GitHub issue: TBD
+_GitHub issue: #45
