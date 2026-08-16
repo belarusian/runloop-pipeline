@@ -66,6 +66,12 @@ class Pipeline:
         sample_size: bound on how many leading data rows feed schema inference
             (and, for :meth:`stream`, the bounded sample) per source. Coercion
             is applied to every row regardless of this bound.
+        schema: an optional explicit :class:`~pipeline.schema.Schema` to use
+            verbatim as the source of truth for ingestion. When supplied, it is
+            threaded through :meth:`run`, :meth:`stream`, :meth:`to_csv`, and
+            :meth:`stream_to_csv`, pinning column types across the whole
+            pipeline, and :meth:`schema` returns it directly. When ``None``
+            (the default), the schema is inferred from the data as before.
 
     Example:
         >>> pipeline = Pipeline("data.csv", [Filter(lambda r: r["id"] > 0)])
@@ -84,10 +90,15 @@ class Pipeline:
         *,
         encoding: str = "utf-8-sig",
         sample_size: int = 1000,
+        schema: Schema | None = None,
     ) -> None:
         self._sources = self._normalize_sources(source)
         self._encoding = encoding
         self._sample_size = sample_size
+        # Explicit schema override (issues #49-#52). When supplied, it is the
+        # source of truth for ingestion and is threaded through every stage;
+        # when None, the schema is inferred as before.
+        self._schema = schema
         # Defensive copy: the caller's list is never aliased.
         self._transforms = list(transforms)
 
@@ -161,7 +172,9 @@ class Pipeline:
         """
         records: list[dict[str, int | float | str]] = []
         for src in self._sources:
-            _, src_records = read_csv(src, self._encoding, self._sample_size)
+            _, src_records = read_csv(
+                src, self._encoding, self._sample_size, schema=self._schema
+            )
             records.extend(src_records)
         return apply_transforms(records, self._transforms)
 
@@ -185,24 +198,33 @@ class Pipeline:
 
         def _chain_sources() -> Iterator[dict[str, int | float | str]]:
             for src in self._sources:
-                yield from iter_rows(src, self._encoding, self._sample_size)
+                yield from iter_rows(
+                    src, self._encoding, self._sample_size, schema=self._schema
+                )
 
         return stream_transforms(_chain_sources(), self._transforms)
 
     def schema(self) -> Schema:
-        """Return the inferred :class:`Schema` of the first source.
+        """Return the :class:`Schema` of the first source.
 
-        For a multi-source pipeline this is the schema of the *first* source
-        only; later sources are not inspected. Reads the first source via
-        :func:`read_csv` and returns the schema half of the returned tuple.
+        When an explicit *schema* was supplied to the constructor, it is
+        returned directly (the source of truth). Otherwise the schema is
+        inferred: for a multi-source pipeline this is the schema of the
+        *first* source only; later sources are not inspected. Reads the first
+        source via :func:`read_csv` and returns the schema half of the returned
+        tuple.
 
         Returns:
-            The inferred :class:`Schema` of the first source.
+            The supplied :class:`Schema` when one was given, otherwise the
+            inferred :class:`Schema` of the first source.
 
         Raises:
             IngestError: if the first source cannot be read or is malformed.
             SchemaError: if schema inference fails.
         """
+        if self._schema is not None:
+            # An explicit schema was supplied: it is the source of truth.
+            return self._schema
         schema, _ = read_csv(self._sources[0], self._encoding, self._sample_size)
         return schema
 

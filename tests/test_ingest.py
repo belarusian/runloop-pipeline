@@ -4,6 +4,7 @@ import pytest
 
 from pipeline.errors import IngestError, SchemaError
 from pipeline.ingest import iter_rows, read_csv
+from pipeline.schema import Column, Schema
 
 
 def test_read_csv_coerces_records(tmp_path):
@@ -176,3 +177,176 @@ def test_iter_rows_header_only_yields_nothing_and_does_not_raise(tmp_path):
 
     # Consuming the generator must not raise and must yield nothing.
     assert list(iter_rows(csv_file)) == []
+
+
+# ---------------------------------------------------------------------------
+# explicit schema override (issues #49-#52)
+# ---------------------------------------------------------------------------
+
+def _schema(*cols: tuple[str, type]) -> Schema:
+    return Schema(columns=tuple(Column(name=n, type=t) for n, t in cols))
+
+
+def test_read_csv_explicit_schema_forces_digits_to_str(tmp_path):
+    # A digits-only column would infer as int, but the supplied schema pins it
+    # to str, so the value must remain a string.
+    csv_file = tmp_path / "digits.csv"
+    csv_file.write_text("id,name\n1,alice\n2,bob\n")
+
+    supplied = _schema(("id", str), ("name", str))
+    schema, records = read_csv(csv_file, schema=supplied)
+
+    # The SAME schema object the caller passed is returned.
+    assert schema is supplied
+    assert records == [{"id": "1", "name": "alice"}, {"id": "2", "name": "bob"}]
+    assert all(isinstance(r["id"], str) for r in records)
+
+
+def test_read_csv_explicit_schema_does_not_call_infer_schema(tmp_path, monkeypatch):
+    csv_file = tmp_path / "data.csv"
+    csv_file.write_text("id,name\n1,alice\n2,bob\n")
+
+    calls: list[object] = []
+
+    def spy(*args, **kwargs):
+        calls.append((args, kwargs))
+        raise AssertionError("infer_schema must not be called with an explicit schema")
+
+    monkeypatch.setattr("pipeline.ingest.infer_schema", spy)
+
+    supplied = _schema(("id", int), ("name", str))
+    schema, records = read_csv(csv_file, schema=supplied)
+
+    assert schema is supplied
+    assert records == [{"id": 1, "name": "alice"}, {"id": 2, "name": "bob"}]
+    assert calls == []
+
+
+def test_read_csv_explicit_schema_coerces_all_rows(tmp_path):
+    # 5 rows; the supplied schema pins `value` to int. Coercion must apply to
+    # every row (not just a sample), so all values come back as ints.
+    csv_file = tmp_path / "all.csv"
+    csv_file.write_text("value\n1\n2\n3\n4\n5\n")
+
+    supplied = _schema(("value", int))
+    schema, records = read_csv(csv_file, schema=supplied, sample_size=1)
+
+    assert schema is supplied
+    assert records == [{"value": v} for v in (1, 2, 3, 4, 5)]
+    assert all(isinstance(r["value"], int) for r in records)
+
+
+def test_read_csv_explicit_schema_ragged_raises(tmp_path):
+    # Supplied schema has 3 columns; a 2-field data row is ragged against it.
+    csv_file = tmp_path / "ragged.csv"
+    csv_file.write_text("a,b,c\n1,2\n3,4,5\n")
+
+    supplied = _schema(("a", int), ("b", int), ("c", int))
+    with pytest.raises(IngestError):
+        read_csv(csv_file, schema=supplied)
+
+
+def test_read_csv_explicit_schema_header_only_returns_empty(tmp_path):
+    csv_file = tmp_path / "header_only.csv"
+    csv_file.write_text("id,name,score\n")
+
+    supplied = _schema(("id", int), ("name", str), ("score", float))
+    schema, records = read_csv(csv_file, schema=supplied)
+
+    assert schema is supplied
+    assert records == []
+
+
+def test_read_csv_explicit_schema_coercion_failure_raises_schema_error(tmp_path):
+    # Supplied schema pins `value` to int, but the data has a non-int cell.
+    csv_file = tmp_path / "bad.csv"
+    csv_file.write_text("value\n1\nx\n")
+
+    supplied = _schema(("value", int))
+    with pytest.raises(SchemaError):
+        read_csv(csv_file, schema=supplied)
+
+
+def test_read_csv_default_schema_none_still_infers(tmp_path):
+    # Regression: with no explicit schema, inference still runs and types are
+    # inferred (digits -> int), not pinned.
+    csv_file = tmp_path / "infer.csv"
+    csv_file.write_text("id,name\n1,alice\n2,bob\n")
+
+    schema, records = read_csv(csv_file)
+
+    assert schema.types() == {"id": int, "name": str}
+    assert records == [{"id": 1, "name": "alice"}, {"id": 2, "name": "bob"}]
+
+
+def test_iter_rows_explicit_schema_forces_digits_to_str(tmp_path):
+    csv_file = tmp_path / "digits.csv"
+    csv_file.write_text("id,name\n1,alice\n2,bob\n")
+
+    supplied = _schema(("id", str), ("name", str))
+    records = list(iter_rows(csv_file, schema=supplied))
+
+    assert records == [{"id": "1", "name": "alice"}, {"id": "2", "name": "bob"}]
+    assert all(isinstance(r["id"], str) for r in records)
+
+
+def test_iter_rows_explicit_schema_does_not_call_infer_schema(tmp_path, monkeypatch):
+    csv_file = tmp_path / "data.csv"
+    csv_file.write_text("id,name\n1,alice\n2,bob\n")
+
+    def spy(*args, **kwargs):
+        raise AssertionError("infer_schema must not be called with an explicit schema")
+
+    monkeypatch.setattr("pipeline.ingest.infer_schema", spy)
+
+    supplied = _schema(("id", int), ("name", str))
+    records = list(iter_rows(csv_file, schema=supplied))
+
+    assert records == [{"id": 1, "name": "alice"}, {"id": 2, "name": "bob"}]
+
+
+def test_iter_rows_explicit_schema_coerces_all_rows(tmp_path):
+    csv_file = tmp_path / "all.csv"
+    csv_file.write_text("value\n1\n2\n3\n4\n5\n")
+
+    supplied = _schema(("value", int))
+    records = list(iter_rows(csv_file, schema=supplied, sample_size=1))
+
+    assert records == [{"value": v} for v in (1, 2, 3, 4, 5)]
+    assert all(isinstance(r["value"], int) for r in records)
+
+
+def test_iter_rows_explicit_schema_ragged_raises(tmp_path):
+    csv_file = tmp_path / "ragged.csv"
+    csv_file.write_text("a,b,c\n1,2\n3,4,5\n")
+
+    supplied = _schema(("a", int), ("b", int), ("c", int))
+    with pytest.raises(IngestError):
+        list(iter_rows(csv_file, schema=supplied))
+
+
+def test_iter_rows_explicit_schema_header_only_yields_nothing(tmp_path):
+    csv_file = tmp_path / "header_only.csv"
+    csv_file.write_text("id,name,score\n")
+
+    supplied = _schema(("id", int), ("name", str), ("score", float))
+    assert list(iter_rows(csv_file, schema=supplied)) == []
+
+
+def test_iter_rows_explicit_schema_coercion_failure_raises_schema_error(tmp_path):
+    csv_file = tmp_path / "bad.csv"
+    csv_file.write_text("value\n1\nx\n")
+
+    supplied = _schema(("value", int))
+    with pytest.raises(SchemaError):
+        list(iter_rows(csv_file, schema=supplied))
+
+
+def test_iter_rows_default_schema_none_still_infers(tmp_path):
+    csv_file = tmp_path / "infer.csv"
+    csv_file.write_text("id,name\n1,alice\n2,bob\n")
+
+    records = list(iter_rows(csv_file))
+
+    assert records == [{"id": 1, "name": "alice"}, {"id": 2, "name": "bob"}]
+    assert all(isinstance(r["id"], int) for r in records)

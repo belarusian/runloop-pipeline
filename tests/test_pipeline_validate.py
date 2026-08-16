@@ -107,8 +107,8 @@ def test_iter_validate_is_lazy_and_does_not_consume_whole_source(tmp_path, monke
 
     original = pp.iter_rows
 
-    def spy_iter_rows(path, encoding, sample_size):
-        for record in original(path, encoding, sample_size):
+    def spy_iter_rows(path, encoding, sample_size, *, schema=None):
+        for record in original(path, encoding, sample_size, schema=schema):
             pulled.append(record["id"])
             yield record
 

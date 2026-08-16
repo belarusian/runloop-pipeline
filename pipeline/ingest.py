@@ -6,6 +6,12 @@ type. :func:`iter_rows` is a streaming variant that lazily yields one coerced
 record at a time, inferring the schema from a bounded sample so large files
 need not be fully materialized.
 
+Both entry points accept an optional explicit *schema*. When one is supplied it
+is used verbatim as the source of truth: no sampling or inference is performed,
+ragged rows are validated against the supplied schema's width, and every row is
+coerced against it. When *schema* is ``None`` the historical inference behavior
+is preserved unchanged.
+
 File I/O problems, undecodable bytes, and malformed CSV (e.g. ragged rows)
 raise :class:`~pipeline.errors.IngestError`; type problems raise
 :class:`~pipeline.errors.SchemaError`.
@@ -49,6 +55,8 @@ def read_csv(
     path: str | Path,
     encoding: str = "utf-8-sig",
     sample_size: int | None = 1000,
+    *,
+    schema: Schema | None = None,
 ) -> tuple[Schema, list[dict[str, int | float | str]]]:
     """Read a CSV file and return its schema plus coerced records.
 
@@ -60,16 +68,23 @@ def read_csv(
         sample_size: bound on how many leading data rows feed schema inference.
             Only the first *sample_size* rows are inspected to classify column
             types; coercion is still applied to every row. ``None`` inspects
-            all rows.
+            all rows. Ignored when an explicit *schema* is supplied.
+        schema: an optional explicit :class:`Schema` to use verbatim as the
+            source of truth. When supplied, no sampling or inference is
+            performed: ragged rows are validated against the supplied schema's
+            width and every row is coerced against it. The same *schema* object
+            the caller passed is returned. When ``None`` (the default), the
+            schema is inferred from the data as before.
 
     Returns:
-        A tuple of the inferred :class:`Schema` and a list of records, where
-        each record maps a column name to its coerced value.
+        A tuple of the :class:`Schema` (the supplied one when *schema* is given,
+        otherwise the inferred one) and a list of records, where each record
+        maps a column name to its coerced value.
 
     Raises:
         IngestError: if the file cannot be read, cannot be decoded, is empty,
             or has ragged rows.
-        SchemaError: if a cell cannot be coerced to its inferred type.
+        SchemaError: if a cell cannot be coerced to its column type.
     """
     try:
         with open(path, "r", newline="", encoding=encoding) as handle:
@@ -84,8 +99,24 @@ def read_csv(
     if not rows:
         raise IngestError(f"CSV file {path!r} is empty (no header row)")
 
-    header = rows[0]
     data_rows = rows[1:]
+
+    if schema is not None:
+        # Explicit schema: use it verbatim. No sampling or inference. Validate
+        # ragged rows against the supplied width and coerce every row against
+        # the supplied schema. Return the same schema object the caller passed.
+        width = len(schema.columns)
+        for row in data_rows:
+            if len(row) != width:
+                raise IngestError(
+                    f"ragged row in {path!r}: expected {width} fields, got {len(row)}"
+                )
+        records: list[dict[str, int | float | str]] = [
+            _coerce_row(row, schema) for row in data_rows
+        ]
+        return schema, records
+
+    header = rows[0]
     width = len(header)
 
     for row in data_rows:
@@ -101,7 +132,7 @@ def read_csv(
 
     schema = infer_schema(data_rows, header=header, sample_size=sample_size)
 
-    records: list[dict[str, int | float | str]] = []
+    records = []
     for row in data_rows:
         records.append(_coerce_row(row, schema))
 
@@ -112,6 +143,8 @@ def iter_rows(
     path: str | Path,
     encoding: str = "utf-8-sig",
     sample_size: int | None = 1000,
+    *,
+    schema: Schema | None = None,
 ) -> Iterator[dict[str, int | float | str]]:
     """Lazily yield coerced records from a CSV file, one at a time.
 
@@ -120,13 +153,23 @@ def iter_rows(
     is coerced and yielded as it is read. This keeps peak memory bounded by the
     sample rather than the whole file.
 
+    When an explicit *schema* is supplied it is used verbatim: no sampling or
+    inference is performed, ragged rows are validated against the supplied
+    schema's width, and every row is coerced against it. A header-only source
+    (no data rows) yields nothing.
+
     Args:
         path: path to the CSV file.
         encoding: text encoding used to decode the file. Defaults to
             ``"utf-8-sig"``, which strips a leading UTF-8 BOM and is a no-op
             for plain UTF-8.
         sample_size: number of leading data rows used to infer the schema.
-            Coercion is applied to every row regardless of this bound.
+            Coercion is applied to every row regardless of this bound. Ignored
+            when an explicit *schema* is supplied.
+        schema: an optional explicit :class:`Schema` to use verbatim as the
+            source of truth. When supplied, no sampling or inference is
+            performed. When ``None`` (the default), the schema is inferred from
+            a bounded sample as before.
 
     Yields:
         One coerced record (a ``{column name: value}`` dict) per data row.
@@ -134,7 +177,7 @@ def iter_rows(
     Raises:
         IngestError: if the file cannot be read, cannot be decoded, is empty,
             or has ragged rows.
-        SchemaError: if a cell cannot be coerced to its inferred type.
+        SchemaError: if a cell cannot be coerced to its column type.
     """
     try:
         handle = open(path, "r", newline="", encoding=encoding)
@@ -147,6 +190,19 @@ def iter_rows(
             header = next(reader)
         except StopIteration:
             raise IngestError(f"CSV file {path!r} is empty (no header row)")
+
+        if schema is not None:
+            # Explicit schema: use it verbatim. No sampling or inference.
+            # Validate ragged rows against the supplied width and coerce every
+            # row against the supplied schema. Header-only yields nothing.
+            width = len(schema.columns)
+            for row in reader:
+                if len(row) != width:
+                    raise IngestError(
+                        f"ragged row in {path!r}: expected {width} fields, got {len(row)}"
+                    )
+                yield _coerce_row(row, schema)
+            return
 
         width = len(header)
 
