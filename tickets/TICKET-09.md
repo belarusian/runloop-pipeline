@@ -34,3 +34,6 @@ has no `sample_size` bound, so type inference cost grows with file size.
   so callers can bound inference, defaulting to a sensible value (e.g. 1000).
 - Add tests: inference with `sample_size` smaller than the row count uses only
   the first N rows; `sample_size=None` preserves current behavior.
+
+---
+_GitHub issue: https://github.com/belarusian/runloop-pipeline/issues/10_

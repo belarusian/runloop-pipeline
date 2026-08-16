@@ -28,3 +28,6 @@ records; there is no lazy/streaming row generator for large files.
   require the full row list.
 - Add a test asserting the generator yields records lazily (e.g. the first
   record is available without the file being fully consumed).
+
+---
+_GitHub issue: https://github.com/belarusian/runloop-pipeline/issues/9_

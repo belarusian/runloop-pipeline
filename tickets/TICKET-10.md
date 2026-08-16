@@ -35,3 +35,6 @@ projection.
     `Schema` containing only the named columns, raising `SchemaError` for any
     name not present.
 - Add tests for each helper, including `project` with a missing column.
+
+---
+_GitHub issue: https://github.com/belarusian/runloop-pipeline/issues/11_

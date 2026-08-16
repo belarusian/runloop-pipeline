@@ -28,3 +28,6 @@ valid for the target encoding raises an unhandled `UnicodeDecodeError`.
   `IngestError(f"cannot decode CSV file {path!r}: {exc}") from exc`.
 - Add a test: write bytes that are invalid UTF-8, assert `IngestError` is
   raised.
+
+---
+_GitHub issue: https://github.com/belarusian/runloop-pipeline/issues/8_

@@ -29,3 +29,6 @@ UTF-8 BOM corrupts the first header name and non-UTF-8 files cannot be read.
 - Document the parameter in the `read_csv` docstring (Args section).
 - Add a test: write a CSV with a leading BOM, assert the first header name is
   clean (no `\ufeff`).
+
+---
+_GitHub issue: https://github.com/belarusian/runloop-pipeline/issues/7_
