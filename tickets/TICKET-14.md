@@ -41,4 +41,4 @@ and have no mechanism to enforce them.
 - Document the contract in `docs/API.md` and `docs/ARCHITECTURE.md`.
 
 ---
-_GitHub issue: TBD_
+_GitHub issue: https://github.com/belarusian/runloop-pipeline/issues/16_

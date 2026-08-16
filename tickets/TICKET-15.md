@@ -44,4 +44,4 @@ the shape of the output row. This is a design gap that blocks implementation.
   and a numeric aggregation over a `str` column raising `TransformError`.
 
 ---
-_GitHub issue: TBD_
+_GitHub issue: https://github.com/belarusian/runloop-pipeline/issues/17_

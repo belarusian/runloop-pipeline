@@ -37,4 +37,4 @@ filter, map, rename, select, or aggregate the records that ingestion produces.
   `docs/ARCHITECTURE.md` for the phase model.
 
 ---
-_GitHub issue: TBD_
+_GitHub issue: https://github.com/belarusian/runloop-pipeline/issues/13_

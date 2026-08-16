@@ -32,4 +32,4 @@ untested.
   raises `TransformError` (and therefore `PipelineError`).
 
 ---
-_GitHub issue: TBD_
+_GitHub issue: https://github.com/belarusian/runloop-pipeline/issues/14_

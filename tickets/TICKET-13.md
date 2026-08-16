@@ -37,4 +37,4 @@ and their failure contract will ship untested.
   expected set.
 
 ---
-_GitHub issue: TBD_
+_GitHub issue: https://github.com/belarusian/runloop-pipeline/issues/15_
