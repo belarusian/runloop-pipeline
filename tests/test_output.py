@@ -274,3 +274,80 @@ def test_iter_write_csv_raises_output_error_on_unwritable_path(tmp_path):
     with pytest.raises(OutputError):
         # The error surfaces on the first pull (when the file is opened).
         next(iter(iter_write_csv(iter([{"a": 1}]), str(directory))))
+
+
+# ---------------------------------------------------------------------------
+# encoding round-trips (issue #45)
+# ---------------------------------------------------------------------------
+
+
+def test_write_csv_non_ascii_round_trips(tmp_path):
+    records = [
+        {"id": 1, "name": "caf\u00e9"},
+        {"id": 2, "name": "na\u00efve"},
+    ]
+    path = tmp_path / "out.csv"
+
+    write_csv(records, str(path))  # default utf-8
+
+    _, read_back = read_csv(str(path))
+    assert read_back == records
+    assert read_back[0]["name"] == "caf\u00e9"
+
+
+def test_write_csv_latin1_round_trips(tmp_path):
+    records = [
+        {"id": 1, "name": "caf\u00e9"},
+        {"id": 2, "name": "na\u00efve"},
+    ]
+    path = tmp_path / "out.csv"
+
+    write_csv(records, str(path), encoding="latin-1")
+
+    # The file bytes are valid latin-1 and decode back to the original values.
+    raw = path.read_bytes()
+    assert raw.decode("latin-1") == "id,name\r\n1,caf\u00e9\r\n2,na\u00efve\r\n"
+    _, read_back = read_csv(str(path), encoding="latin-1")
+    assert read_back == records
+
+
+def test_write_csv_unencodable_value_raises_output_error(tmp_path):
+    # The euro sign (U+20AC) is not representable in latin-1.
+    records = [{"id": 1, "name": "1\u20ac"}]
+    path = tmp_path / "out.csv"
+
+    with pytest.raises(OutputError):
+        write_csv(records, str(path), encoding="latin-1")
+
+
+def test_iter_write_csv_unencodable_value_raises_output_error(tmp_path):
+    # The euro sign (U+20AC) is not representable in latin-1. The error
+    # surfaces on the first pull (when the first row is written).
+    source = iter([{"id": 1, "name": "1\u20ac"}])
+    path = tmp_path / "out.csv"
+
+    stream = iter_write_csv(source, str(path), encoding="latin-1")
+    with pytest.raises(OutputError):
+        next(stream)
+
+
+def test_write_csv_explicit_schema_column_absent_from_record_renders_empty(tmp_path):
+    # The schema declares a column that is absent from the record; it must
+    # render as an empty string in that position.
+    records = [{"a": 1, "c": 3}]
+    schema = Schema(
+        columns=(
+            Column("a", int),
+            Column("b", str),
+            Column("c", int),
+        )
+    )
+    path = tmp_path / "out.csv"
+
+    write_csv(records, str(path), schema=schema)
+
+    rows = _read_raw(path)
+    assert rows == [
+        ["a", "b", "c"],
+        ["1", "", "3"],
+    ]

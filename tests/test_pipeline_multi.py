@@ -15,6 +15,7 @@ Covers:
 
 from __future__ import annotations
 
+import csv
 import types
 
 import pytest
@@ -376,3 +377,47 @@ def test_to_csv_uses_pipeline_schema_when_none_given(tmp_path):
     assert rows[0] == ["a", "b", "c"]
     assert rows[1] == ["1", "2", "3"]
     assert rows[2] == ["4", "5", "6"]
+
+
+# ---------------------------------------------------------------------------
+# multi-source explicit schema: stable column order + empty-string rendering
+# for columns absent from some records (issue #43)
+# ---------------------------------------------------------------------------
+
+
+def test_multi_source_explicit_schema_stable_order_and_empty_string_rendering(tmp_path):
+    # Two sources with *different* column sets: source A has `name`, source B
+    # has `score`. Neither source has both columns.
+    a = _write_csv(tmp_path, "id,name\n1,alice\n2,bob\n", "a.csv")
+    b = _write_csv(tmp_path, "id,score\n3,9.5\n4,8.0\n", "b.csv")
+
+    # The explicit schema declares all three columns in a fixed order.
+    schema = Schema(
+        columns=(
+            Column("id", int),
+            Column("name", str),
+            Column("score", float),
+        )
+    )
+
+    batch_path = tmp_path / "batch.csv"
+    stream_path = tmp_path / "stream.csv"
+
+    pipeline = Pipeline([a, b])
+    assert pipeline.to_csv(str(batch_path), schema=schema) == 4
+    assert pipeline.stream_to_csv(str(stream_path), schema=schema) == 4
+
+    # Both writers produce the same stable column order and render a column
+    # that is absent from a record as an empty string.
+    for path in (batch_path, stream_path):
+        with open(path, "r", newline="", encoding="utf-8") as handle:
+            rows = list(csv.reader(handle))
+        assert rows == [
+            ["id", "name", "score"],
+            ["1", "alice", ""],
+            ["2", "bob", ""],
+            ["3", "", "9.5"],
+            ["4", "", "8.0"],
+        ]
+    # Batch and streaming outputs are byte-identical.
+    assert batch_path.read_bytes() == stream_path.read_bytes()
