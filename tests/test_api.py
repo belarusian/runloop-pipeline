@@ -33,6 +33,10 @@ def test_expected_public_api():
         "Composed",
         # Orchestration (Cycle 5)
         "Pipeline",
+        # Output stage + multi-source (Cycle 6)
+        "OutputError",
+        "write_csv",
+        "iter_write_csv",
     }
     assert expected.issubset(set(pipeline.__all__))
 
