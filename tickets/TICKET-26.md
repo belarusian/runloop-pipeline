@@ -55,4 +55,4 @@ streaming entry point `iter_validate(source) -> Iterator[ValidationIssue]`.
   `pipeline/__init__.py`.
 
 ---
-_GitHub issue: TBD_
+_GitHub issue: #37

@@ -54,4 +54,4 @@ the validation stage (TICKET-26) over the pipeline's records.
   re-implement rule evaluation.
 
 ---
-_GitHub issue: TBD_
+_GitHub issue: #40

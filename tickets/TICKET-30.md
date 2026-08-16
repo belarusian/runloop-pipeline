@@ -68,4 +68,4 @@ docs and tests must be updated in the same change or they will diverge.
   the new exports.
 
 ---
-_GitHub issue: TBD_
+_GitHub issue: #41

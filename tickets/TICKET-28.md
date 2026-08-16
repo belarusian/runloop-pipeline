@@ -60,4 +60,4 @@ membership).
   application time, not return a silent pass.
 
 ---
-_GitHub issue: TBD_
+_GitHub issue: #39
