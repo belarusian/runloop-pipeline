@@ -37,6 +37,14 @@ def test_expected_public_api():
         "OutputError",
         "write_csv",
         "iter_write_csv",
+        # Validation stage (Cycle 7)
+        "ValidationError",
+        "ValidationIssue",
+        "Validator",
+        "require_column",
+        "type_is",
+        "in_range",
+        "one_of",
     }
     assert expected.issubset(set(pipeline.__all__))
 

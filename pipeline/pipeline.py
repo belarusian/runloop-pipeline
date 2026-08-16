@@ -40,13 +40,14 @@ as :class:`~pipeline.errors.OutputError` (from
 
 from __future__ import annotations
 
-from collections.abc import Iterator, Sequence
+from collections.abc import Callable, Iterator, Sequence
 
 from pipeline.errors import PipelineError
 from pipeline.ingest import iter_rows, read_csv
 from pipeline.output import iter_write_csv, write_csv
 from pipeline.schema import Schema
 from pipeline.transform import Transform, apply_transforms, stream_transforms
+from pipeline.validation import ValidationIssue, Validator
 
 
 class Pipeline:
@@ -277,3 +278,57 @@ class Pipeline:
         ):
             count = running
         return count
+
+    def validate(
+        self, rules: Sequence[Callable[[dict, int], list[ValidationIssue]]]
+    ) -> list[ValidationIssue]:
+        """Run the pipeline in batch mode and validate the resulting records.
+
+        Builds a :class:`~pipeline.validation.Validator` from *rules*, runs the
+        pipeline via :meth:`run`, and returns the validator's issues for the
+        final records in record-major order.
+
+        Args:
+            rules: an ordered sequence of per-record checkers (each with the
+                signature ``check(record, row) -> list[ValidationIssue]``).
+
+        Returns:
+            A new list of :class:`~pipeline.validation.ValidationIssue` for the
+            final records. Empty when no rule finds any issue.
+
+        Raises:
+            IngestError: if a source cannot be read or is malformed.
+            SchemaError: if a cell cannot be coerced to its inferred type.
+            TransformError: if a transform fails.
+            ValidationError: if a rule is malformed (bad factory argument).
+        """
+        validator = Validator(rules)
+        records = self.run()
+        return validator.validate(records)
+
+    def iter_validate(
+        self, rules: Sequence[Callable[[dict, int], list[ValidationIssue]]]
+    ) -> Iterator[ValidationIssue]:
+        """Run the pipeline in streaming mode and validate records lazily.
+
+        Builds a :class:`~pipeline.validation.Validator` from *rules* and pipes
+        :meth:`stream` through :meth:`Validator.iter_validate`, yielding issues
+        one at a time without materializing the source. This method never calls
+        :meth:`run`.
+
+        Args:
+            rules: an ordered sequence of per-record checkers (each with the
+                signature ``check(record, row) -> list[ValidationIssue]``).
+
+        Yields:
+            One :class:`~pipeline.validation.ValidationIssue` at a time, in
+            record-major order.
+
+        Raises:
+            IngestError: if a source cannot be read or is malformed.
+            SchemaError: if a cell cannot be coerced to its inferred type.
+            TransformError: if any transform is not streamable or fails.
+            ValidationError: if a rule is malformed (bad factory argument).
+        """
+        validator = Validator(rules)
+        return validator.iter_validate(self.stream())

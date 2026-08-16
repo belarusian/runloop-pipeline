@@ -6,6 +6,7 @@ from pipeline.errors import (
     PipelineError,
     SchemaError,
     TransformError,
+    ValidationError,
 )
 from pipeline.ingest import iter_rows, read_csv
 from pipeline.output import iter_write_csv, write_csv
@@ -22,6 +23,14 @@ from pipeline.transform import (
     apply_transforms,
     compose,
     stream_transforms,
+)
+from pipeline.validation import (
+    ValidationIssue,
+    Validator,
+    in_range,
+    one_of,
+    require_column,
+    type_is,
 )
 
 __version__ = "0.1.0"
@@ -42,13 +51,20 @@ __all__ = [
     "Select",
     "Transform",
     "TransformError",
+    "ValidationError",
+    "ValidationIssue",
+    "Validator",
     "apply_transforms",
     "coerce_value",
     "compose",
+    "in_range",
     "infer_schema",
     "iter_rows",
     "iter_write_csv",
+    "one_of",
     "read_csv",
+    "require_column",
     "stream_transforms",
+    "type_is",
     "write_csv",
 ]
