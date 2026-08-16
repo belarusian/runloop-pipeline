@@ -19,6 +19,14 @@ def test_expected_public_api():
         "IngestError",
         "SchemaError",
         "TransformError",
+        # Transformation phase
+        "Transform",
+        "Filter",
+        "MapColumn",
+        "Rename",
+        "Select",
+        "Aggregate",
+        "apply_transforms",
     }
     assert expected.issubset(set(pipeline.__all__))
 
