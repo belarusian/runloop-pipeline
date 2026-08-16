@@ -27,3 +27,14 @@ class TransformError(PipelineError):
 class OutputError(PipelineError):
     """Raised when the output stage cannot write the transformed records
     (e.g. non-writable path, undecodable output)."""
+
+
+class ValidationError(PipelineError):
+    """Raised for malformed rules or unexpected internal validation failures.
+
+    Validation *issues* (a missing column, a wrong type, an out-of-range
+    value, ...) are returned as data via :class:`~pipeline.validation.ValidationIssue`
+    objects, never raised. This exception is reserved for programmer errors in
+    the validation stage itself: a rule factory given a bad argument, or an
+    unexpected internal failure while running the validator.
+    """

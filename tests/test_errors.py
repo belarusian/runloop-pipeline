@@ -8,12 +8,13 @@ from pipeline.errors import (
     PipelineError,
     SchemaError,
     TransformError,
+    ValidationError,
 )
 
 
 @pytest.mark.parametrize(
     "exc_type",
-    [IngestError, SchemaError, TransformError, OutputError],
+    [IngestError, SchemaError, TransformError, OutputError, ValidationError],
 )
 def test_subclasses_are_pipeline_errors(exc_type):
     assert issubclass(exc_type, PipelineError)
@@ -21,7 +22,7 @@ def test_subclasses_are_pipeline_errors(exc_type):
 
 @pytest.mark.parametrize(
     "exc_type",
-    [PipelineError, IngestError, SchemaError, TransformError, OutputError],
+    [PipelineError, IngestError, SchemaError, TransformError, OutputError, ValidationError],
 )
 def test_each_error_is_raisable(exc_type):
     with pytest.raises(exc_type):
