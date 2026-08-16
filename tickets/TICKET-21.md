@@ -46,4 +46,4 @@ stage: there is no way to persist the transformed records back to a CSV file.
   `OutputError`.
 
 ---
-_GitHub issue: TBD_
+_GitHub issue: https://github.com/belarusian/runloop-pipeline/issues/31_

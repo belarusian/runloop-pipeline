@@ -51,4 +51,4 @@ reconciled into a single output schema.
   with the documented sentinel.
 
 ---
-_GitHub issue: TBD_
+_GitHub issue: https://github.com/belarusian/runloop-pipeline/issues/34_

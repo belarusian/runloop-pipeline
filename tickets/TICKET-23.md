@@ -53,4 +53,4 @@ glue.
   sources is lazy (pulling one record does not read the second file).
 
 ---
-_GitHub issue: TBD_
+_GitHub issue: https://github.com/belarusian/runloop-pipeline/issues/33_

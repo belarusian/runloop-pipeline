@@ -42,4 +42,4 @@ so a future CSV writer cannot honor the "never a bare `Exception`" contract.
   `OutputError`, not a bare `OSError`.
 
 ---
-_GitHub issue: TBD_
+_GitHub issue: https://github.com/belarusian/runloop-pipeline/issues/32_

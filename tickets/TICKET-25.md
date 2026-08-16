@@ -51,4 +51,4 @@ not match the intended end-to-end pipeline.
   never diverge.
 
 ---
-_GitHub issue: TBD_
+_GitHub issue: https://github.com/belarusian/runloop-pipeline/issues/35_
