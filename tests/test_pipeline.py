@@ -150,8 +150,8 @@ def test_stream_is_lazy_via_counting_source(tmp_path, monkeypatch):
 
     pulled: list[int] = []
 
-    def counting_iter_rows(path, encoding, sample_size):
-        for record in iter_rows(path, encoding, sample_size):
+    def counting_iter_rows(path, encoding, sample_size, *, schema=None):
+        for record in iter_rows(path, encoding, sample_size, schema=schema):
             pulled.append(record["n"])
             yield record
 
