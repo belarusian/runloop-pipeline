@@ -4,6 +4,7 @@ import pytest
 
 from pipeline.errors import (
     IngestError,
+    OutputError,
     PipelineError,
     SchemaError,
     TransformError,
@@ -12,7 +13,7 @@ from pipeline.errors import (
 
 @pytest.mark.parametrize(
     "exc_type",
-    [IngestError, SchemaError, TransformError],
+    [IngestError, SchemaError, TransformError, OutputError],
 )
 def test_subclasses_are_pipeline_errors(exc_type):
     assert issubclass(exc_type, PipelineError)
@@ -20,7 +21,7 @@ def test_subclasses_are_pipeline_errors(exc_type):
 
 @pytest.mark.parametrize(
     "exc_type",
-    [PipelineError, IngestError, SchemaError, TransformError],
+    [PipelineError, IngestError, SchemaError, TransformError, OutputError],
 )
 def test_each_error_is_raisable(exc_type):
     with pytest.raises(exc_type):
@@ -34,3 +35,15 @@ def test_pipeline_error_is_exception():
 def test_catch_by_base_type():
     with pytest.raises(PipelineError):
         raise IngestError("bad file")
+
+
+def test_output_error_catchable_as_pipeline_error():
+    with pytest.raises(PipelineError):
+        raise OutputError("cannot write output")
+
+
+def test_output_error_is_distinct_from_ingest_error():
+    # OutputError must not be an IngestError (write failures are not read
+    # failures) and vice versa.
+    assert not issubclass(OutputError, IngestError)
+    assert not issubclass(IngestError, OutputError)

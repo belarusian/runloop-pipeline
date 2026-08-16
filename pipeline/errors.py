@@ -22,3 +22,8 @@ class SchemaError(PipelineError):
 
 class TransformError(PipelineError):
     """Raised when a transform-stage operation fails."""
+
+
+class OutputError(PipelineError):
+    """Raised when the output stage cannot write the transformed records
+    (e.g. non-writable path, undecodable output)."""

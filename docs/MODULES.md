@@ -11,11 +11,11 @@ Package root. Re-exports the public API and defines `__all__` and
 
 - **Exports:** `Column`, `Schema`, `infer_schema`, `coerce_value`,
   `read_csv`, `iter_rows`, `PipelineError`, `IngestError`, `SchemaError`,
-  `TransformError`, `Transform`, `Filter`, `MapColumn`, `Rename`, `Select`,
-  `Aggregate`, `apply_transforms`.
-- **Depends on:** `errors`, `ingest`, `schema`, `transform`.
-- **Note:** the Cycle 4 streaming/composition symbols (`stream_transforms`,
-  `compose`, `Composed`) are **not yet exported** — see `TICKET-19`.
+  `TransformError`, `OutputError`, `Transform`, `Filter`, `MapColumn`,
+  `Rename`, `Select`, `Aggregate`, `apply_transforms`, `stream_transforms`,
+  `compose`, `Composed`, `Pipeline`, `write_csv`, `iter_write_csv`.
+- **Depends on:** `errors`, `ingest`, `schema`, `transform`, `output`,
+  `pipeline`.
 
 ### `pipeline/errors.py`
 Exception hierarchy. No dependencies.
@@ -24,6 +24,8 @@ Exception hierarchy. No dependencies.
 - `IngestError(PipelineError)` — file/CSV problems.
 - `SchemaError(PipelineError)` — inference / coercion problems.
 - `TransformError(PipelineError)` — transform-stage failures.
+- `OutputError(PipelineError)` — output/write-stage failures (non-writable
+  path, undecodable output).
 
 ### `pipeline/schema.py`
 Schema model and type inference.
@@ -36,21 +38,21 @@ Schema model and type inference.
   classify each column as `int` / `float` / `str`.
 - `coerce_value(value, col_type) -> int | float | str` — coerce one string cell.
 - **Depends on:** `errors` (`SchemaError`).
-- **Used by:** `ingest`.
+- **Used by:** `ingest`, `output`.
 
 ### `pipeline/ingest.py`
 CSV ingestion.
 
 - `read_csv(path, encoding="utf-8-sig", sample_size=1000) -> (Schema, list[record])`.
 - `iter_rows(path, encoding="utf-8-sig", sample_size=1000) -> Iterator[record]`
-  — the lazy streaming source intended for the Cycle 4 streaming path.
+  — the lazy streaming source used by the streaming path.
 - **Depends on:** `errors` (`IngestError`), `schema` (`Schema`, `coerce_value`,
   `infer_schema`).
 - **Produces:** the `list[record]` (batch) or `Iterator[record]` (streaming)
   that the Transformation phase consumes.
 
 ### `pipeline/transform.py`
-Transformation phase. Implemented (Cycle 3).
+Transformation phase.
 
 - `Transform` (ABC) — base contract: `apply_one(record) -> record | None`
   (per-record; `None` drops the record) and `apply(records) -> list[record]`
@@ -62,16 +64,57 @@ Transformation phase. Implemented (Cycle 3).
 - `Aggregate(group_by, agg)` — batch-only; one row per distinct `group_by`
   key. `apply_one` raises `TransformError`.
 - `apply_transforms(records, transforms) -> list[record]` — batch composition.
+- `stream_transforms(source, transforms) -> Iterator[record]` — lazy
+  streaming composition over an `Iterator[record]`.
+- `Composed(transforms)` — a `Transform` wrapping a tuple of transforms.
+- `compose(*transforms) -> Composed` — fold a sequence into one `Composed`.
 - **Depends on:** `errors` (`TransformError`).
-- **Consumes:** `list[record]` from `ingest`.
-- **Produces:** `list[record]` for downstream phases.
-- **Cycle 4 target (not yet implemented):** a `streamable` class attribute, a
-  lazy `stream_transforms(source: Iterator[dict], transforms) ->
-  Iterator[dict]` generator, and a `compose()` helper returning a `Composed`
-  Transform. See [API.md](API.md#streaming--composition-cycle-4-target) and
-  tickets `TICKET-16` … `TICKET-20`.
+- **Consumes:** `list[record]` (batch) or `Iterator[record]` (streaming)
+  from `ingest`.
+- **Produces:** `list[record]` / `Iterator[record]` for the output phase.
+
+### `pipeline/output.py`
+Output stage (Cycle 6). The write counterpart of `ingest`.
+
+- `write_csv(records, path, *, schema=None, encoding="utf-8") -> int` — batch
+  writer: writes a header row plus one row per record, returns the number of
+  data rows written.
+- `iter_write_csv(source, path, *, schema=None, encoding="utf-8") ->
+  Iterator[int]` — lazy streaming writer (a generator): consumes an
+  `Iterator[record]` one record at a time, writing each row and yielding a
+  running row count.
+- Column order comes from an explicit `Schema` when given, else from the
+  records (first-seen union for `write_csv`, first record's keys for
+  `iter_write_csv`). Values render via `str()`; missing keys render as an
+  empty string.
+- **Depends on:** `errors` (`OutputError`), `schema` (`Schema`).
+- **Consumes:** `list[record]` (batch) or `Iterator[record]` (streaming)
+  from `transform`.
+- **Failure contract:** every failure raises `OutputError`, never a bare
+  `Exception`.
+
+### `pipeline/pipeline.py`
+Orchestration (Cycle 5, extended in Cycle 6).
+
+- `Pipeline(source, transforms=(), *, encoding="utf-8-sig", sample_size=1000)`
+  — `source` is a `str` or a `Sequence[str]` (multi-source). A bare `str` is
+  normalized to a one-element list; a sequence is stored as a defensive copy.
+- `run() -> list[record]` — batch: read every source in order, concatenate,
+  apply transforms.
+- `stream() -> Iterator[record]` — streaming: lazily chain `iter_rows` over
+  each source in order, piped through `stream_transforms`.
+- `schema() -> Schema` — the inferred schema of the **first** source.
+- `to_csv(path, *, schema=None, encoding="utf-8") -> int` — batch output via
+  `write_csv`.
+- `stream_to_csv(path, *, schema=None, encoding="utf-8") -> int` — streaming
+  output via `iter_write_csv` (never calls `run`).
+- **Depends on:** `errors` (`PipelineError`), `ingest`, `schema`, `transform`,
+  `output`.
 
 ## Dependency graph
 
-    errors ──┬── schema ── ingest ──┐
-             └── transform ─────────┴── __init__
+    errors ──┬── schema ──┬── ingest ────────────┐
+             │            └── output ────────────┤
+             └── transform ──────────────────────┼── pipeline ── __init__
+                                                 │
+    ingest (source) → transform (records) → output (CSV)
